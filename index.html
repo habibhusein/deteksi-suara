@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simulasi Smart Home Voice Control</title>
+    <title>Smart Home IoT Control (MQTT HiveMQ)</title>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -19,6 +20,14 @@
 
         h1 { margin-bottom: 5px; color: #00d2ff; text-align: center; }
         
+        #status-mqtt {
+            font-size: 14px;
+            margin-bottom: 15px;
+            padding: 5px 10px;
+            border-radius: 20px;
+            background-color: #333;
+        }
+
         .setup-container {
             background-color: #262626;
             padding: 15px 25px;
@@ -118,13 +127,14 @@
 </head>
 <body>
 
-    <h1>Smart Home Simulation</h1>
+    <h1>Smart Home Control (HiveMQ)</h1>
+    <div id="status-mqtt">Koneksi Broker: <span style="color: #ff3333;">Menghubungkan... ⏳</span></div>
     
     <div class="setup-container">
         <button id="btn-sandi">1. Rekam Nama/Sandi</button>
         <button id="btn-mulai" disabled>2. Mulai Perintah</button>
-        <div id="status-sandi">Sandi belum diatur</div>
-        <div id="pesan">Silakan rekam sandi suara terlebih dahulu.</div>
+        <div id="status-sandi">Sandi belum diatur (Tombol mic terkunci)</div>
+        <div id="pesan">Atur nama dulu untuk mengaktifkan kontrol suara.</div>
     </div>
 
     <div class="dashboard">
@@ -160,20 +170,61 @@
         const btnMulai = document.getElementById('btn-mulai');
         const statusSandi = document.getElementById('status-sandi');
         const pesan = document.getElementById('pesan');
+        const statusMqttElemen = document.getElementById('status-mqtt');
 
         let kataSandiTersimpan = "";
         let modeRekamSandi = false;
 
+        // --- KONFIGURASI MQTT HIVEMQ ---
+        // Menggunakan nama unik topik agar tidak bertabrakan dengan orang lain di seluruh dunia
+        const TOPIC_BASE = "habibhusein/smarthome/"; 
+        
+        // Menghubungkan ke Broker Publik HiveMQ menggunakan WebSockets Secure (WSS port 8884)
+        const client = mqtt.connect('wss://broker.hivemq.com:8884/mqtt');
+
+        client.on('connect', () => {
+            statusMqttElemen.innerHTML = 'Koneksi Broker: <span style="color: #00ff88;">Terhubung ke HiveMQ 🟢</span>';
+            
+            // Subscribe ke semua status alat di rumah ini menggunakan wildcard (#)
+            client.subscribe(TOPIC_BASE + '#', (err) => {
+                if (!err) console.log("Berhasil subscribe ke seluruh ruangan!");
+            });
+        });
+
+        client.on('error', (err) => {
+            statusMqttElemen.innerHTML = 'Koneksi Broker: <span style="color: #ff3333;">Gagal Terhubung 🔴</span>';
+            console.error(err);
+        });
+
+        // MENERIMA PESAN DARI HIVEMQ (Sinkronisasi otomatis saat web dibuka / diubah HP lain)
+        client.on('message', (topic, message) => {
+            const statusTerakhir = message.toString(); // "nyala" atau "mati"
+            
+            // Memotong topik untuk tahu ini alat apa dan ruangan berapa
+            // Contoh: "habibhusein/smarthome/lampu/1" -> ["habibhusein", "smarthome", "lampu", "1"]
+            const info = topic.replace(TOPIC_BASE, "").split("/");
+            const tipeAlat = info[0];   // "lampu" atau "kipas"
+            const nomorRuangan = info[1]; // "1" sampai "5"
+
+            const targetID = `${tipeAlat}-${nomorRuangan}`;
+            const elemenAlat = document.getElementById(targetID);
+
+            if (elemenAlat) {
+                if (statusTerakhir === 'nyala') {
+                    elemenAlat.classList.add('active');
+                    elemenAlat.innerHTML = tipeAlat === 'lampu' ? '💡 Lampu ON' : '<span>🌀</span> Kipas ON';
+                } else if (statusTerakhir === 'mati') {
+                    elemenAlat.classList.remove('active');
+                    elemenAlat.innerHTML = tipeAlat === 'lampu' ? '💡 Lampu OFF' : '<span>🌀</span> Kipas OFF';
+                }
+            }
+        });
+
+        // --- KONTROL SUARA (SPEECH RECOGNITION) ---
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-        // Fungsi mengubah teks angka bahasa indonesia menjadi digit nominal
         function normalisasiAngka(teks) {
-            return teks
-                .replace(/satu/g, '1')
-                .replace(/dua/g, '2')
-                .replace(/tiga/g, '3')
-                .replace(/empat/g, '4')
-                .replace(/lima/g, '5');
+            return teks.replace(/satu/g, '1').replace(/dua/g, '2').replace(/tiga/g, '3').replace(/empat/g, '4').replace(/lima/g, '5');
         }
 
         if (SpeechRecognition) {
@@ -182,7 +233,6 @@
             recognition.continuous = false;
             recognition.interimResults = false;
 
-            // Tombol Rekam Sandi
             btnSandi.addEventListener('click', () => {
                 modeRekamSandi = true;
                 recognition.start();
@@ -192,7 +242,6 @@
                 btnMulai.disabled = true;
             });
 
-            // Tombol Mulai Perintah
             btnMulai.addEventListener('click', () => {
                 modeRekamSandi = false;
                 recognition.start();
@@ -201,88 +250,59 @@
                 btnSandi.disabled = true;
             });
 
-            // Proses Hasil Suara
             recognition.onresult = (event) => {
                 let hasilSuara = event.results[0][0].transcript.toLowerCase().trim();
-                
-                // Normalisasi teks agar "satu" jadi "1", dll.
                 hasilSuara = normalisasiAngka(hasilSuara);
 
                 if (modeRekamSandi) {
-                    // Simpan Sandi
                     kataSandiTersimpan = hasilSuara;
                     statusSandi.innerText = `Pemilik: "${kataSandiTersimpan}"`;
-                    pesan.innerText = "Sandi disimpan! Silakan klik tombol 2 untuk memberi perintah.";
+                    pesan.innerText = "Sandi disimpan! Tombol mic perintah aktif.";
                     btnMulai.disabled = false;
                 } else {
-                    // Deteksi Perintah Kompleks
                     pesan.innerHTML = `Terdeteksi: <b>"${hasilSuara}"</b>`;
 
-                    // 1. Cek Sandi Kebenaran Pemilik
                     if (!hasilSuara.includes(kataSandiTersimpan)) {
                         pesan.innerHTML += "<br><span style='color:#ff3333;'>❌ Akses Ditolak! Nama pemilik salah.</span>";
                         return;
                     }
 
-                    // 2. Deteksi Ruangan (1 - 5)
                     let nomorRuangan = null;
                     for (let i = 1; i <= 5; i++) {
-                        if (hasilSuara.includes(i.toString())) {
-                            nomorRuangan = i;
-                            break;
-                        }
+                        if (hasilSuara.includes(i.toString())) { nomorRuangan = i; break; }
                     }
 
-                    // 3. Deteksi Jenis Alat (Lampu / Kipas)
                     let tipeAlat = null;
-                    if (hasilSuara.includes('lampu')) {
-                        tipeAlat = 'lampu';
-                    } else if (hasilSuara.includes('kipas') || hasilSuara.includes('baling')) {
-                        tipeAlat = 'kipas';
-                    }
+                    if (hasilSuara.includes('lampu')) { tipeAlat = 'lampu'; } 
+                    else if (hasilSuara.includes('kipas') || hasilSuara.includes('baling')) { tipeAlat = 'kipas'; }
 
-                    // 4. Deteksi Aksi (Nyala / Mati)
                     let aksi = null;
-                    if (hasilSuara.includes('nyala') || hasilSuara.includes('hidup')) {
-                        aksi = 'nyala';
-                    } else if (hasilSuara.includes('mati')) {
-                        aksi = 'mati';
-                    }
+                    if (hasilSuara.includes('nyala') || hasilSuara.includes('hidup')) { aksi = 'nyala'; } 
+                    else if (hasilSuara.includes('mati')) { aksi = 'mati'; }
 
-                    // Eksekusi jika perintah lengkap
                     if (nomorRuangan && tipeAlat && aksi) {
-                        const targetID = `${tipeAlat}-${nomorRuangan}`;
-                        const elemenAlat = document.getElementById(targetID);
+                        // KIRIM DATA KE HIVEMQ BROKER
+                        // Kita tambahkan opsi { retain: true } agar broker mengingat kondisi terakhir ini!
+                        const topikTujuan = `${TOPIC_BASE}${tipeAlat}/${nomorRuangan}`;
+                        client.publish(topikTujuan, aksi, { retain: true, qos: 1 });
 
-                        if (aksi === 'nyala') {
-                            elemenAlat.classList.add('active');
-                            elemenAlat.innerHTML = tipeAlat === 'lampu' ? '💡 Lampu ON' : '<span>🌀</span> Kipas ON';
-                            pesan.innerHTML += `<br><span style='color:#00ff88;'>✅ Berhasil: ${tipeAlat} ${nomorRuangan} dinyalakan!</span>`;
-                        } else {
-                            elemenAlat.classList.remove('active');
-                            elemenAlat.innerHTML = tipeAlat === 'lampu' ? '💡 Lampu OFF' : '<span>🌀</span> Kipas OFF';
-                            pesan.innerHTML += `<br><span style='color:#ff3333;'>✅ Berhasil: ${tipeAlat} ${nomorRuangan} dimatikan!</span>`;
-                        }
+                        pesan.innerHTML += `<br><span style='color:#00ff88;'>🚀 Perintah dikirim ke MQTT: ${tipeAlat} ${nomorRuangan} -> ${aksi}</span>`;
                     } else {
-                        // Jika ada bagian perintah yang kurang jelas
-                        pesan.innerHTML += "<br><span style='color:#ffff00;'>⚠️ Perintah kurang jelas. Pastikan sebutkan: [Nama] [Alat] [Nomor Ruangan] [Nyala/Mati]</span>";
+                        pesan.innerHTML += "<br><span style='color:#ffff00;'>⚠️ Perintah kurang jelas. Contoh: [Nama] [Alat] [Angka] [Nyala/Mati]</span>";
                     }
                 }
             };
 
-            recognition.onerror = (e) => {
-                pesan.innerText = "Error: " + e.error + ". Coba klik tombol lagi.";
-            };
-
+            recognition.onerror = (e) => { pesan.innerText = "Error: " + e.error; };
             recognition.onend = () => {
                 btnSandi.disabled = false;
                 if (kataSandiTersimpan !== "") btnMulai.disabled = false;
             };
-
         } else {
             pesan.innerText = "Browser tidak mendukung Web Speech API.";
         }
     </script>
 </body>
 </html>
+
 
