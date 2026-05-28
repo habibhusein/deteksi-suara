@@ -3,183 +3,286 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Deteksi Suara dengan Sandi</title>
+    <title>Simulasi Smart Home Voice Control</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1a1a1a;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
             min-height: 100vh;
-            margin: 0;
-            background-color: #222;
-            color: white;
-            transition: background-color 0.5s ease;
         }
-        #indikator {
-            width: 180px;
-            height: 180px;
-            border-radius: 50%;
-            background-color: #555;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 32px;
-            font-weight: bold;
-            margin-bottom: 20px;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-            transition: all 0.3s ease;
-        }
-        .kontrol-grup {
-            background-color: #333;
-            padding: 20px;
-            border-radius: 10px;
+
+        h1 { margin-bottom: 5px; color: #00d2ff; text-align: center; }
+        
+        .setup-container {
+            background-color: #262626;
+            padding: 15px 25px;
+            border-radius: 12px;
             text-align: center;
             margin-bottom: 20px;
-            width: 80%;
-            max-width: 400px;
+            width: 100%;
+            max-width: 500px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
         }
+
         button {
             padding: 12px 20px;
-            font-size: 16px;
+            font-size: 15px;
+            font-weight: bold;
             cursor: pointer;
             border: none;
             border-radius: 8px;
             color: white;
             margin: 5px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            transition: all 0.2s;
         }
         #btn-sandi { background-color: #ff9800; }
         #btn-mulai { background-color: #007bff; }
-        button:disabled { background-color: #666; cursor: not-allowed; }
-        
-        #status-sandi {
-            color: #ff9800;
-            font-weight: bold;
+        button:disabled { background-color: #444; color: #777; cursor: not-allowed; }
+
+        #status-sandi { color: #ff9800; margin-top: 5px; font-weight: bold; }
+        #pesan { color: #00ff88; margin-top: 10px; font-size: 15px; min-height: 40px; text-align: center;}
+
+        /* Grid Rumah / Ruangan */
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 20px;
+            width: 100%;
+            max-width: 1000px;
             margin-top: 10px;
         }
-        #pesan {
-            font-size: 16px;
+
+        .ruangan {
+            background-color: #2d2d2d;
+            border: 2px solid #444;
+            border-radius: 15px;
+            padding: 15px;
             text-align: center;
-            padding: 10px;
-            min-height: 50px;
-            color: #ccc;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            transition: border-color 0.3s;
+        }
+
+        .ruangan h3 {
+            margin-top: 0;
+            color: #e0e0e0;
+            border-bottom: 1px solid #444;
+            padding-bottom: 8px;
+        }
+
+        /* Alat elektronik */
+        .perangkat {
+            background-color: #222;
+            padding: 12px;
+            margin: 10px 0;
+            border-radius: 8px;
+            font-weight: bold;
+            color: #888;
+            transition: all 0.4s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        /* Status Lampu NYALA */
+        .lampu.active {
+            background-color: #ffca28;
+            color: #000;
+            box-shadow: 0 0 15px #ffca28;
+        }
+
+        /* Status Kipas NYALA */
+        .kipas.active {
+            background-color: #29b6f6;
+            color: #000;
+            box-shadow: 0 0 15px #29b6f6;
+        }
+
+        /* Efek Berputar untuk ikon kipas */
+        .kipas.active span {
+            display: inline-block;
+            animation: putar 1s linear infinite;
+        }
+
+        @keyframes putar {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body>
 
-    <div id="indikator">MATI</div>
+    <h1>Smart Home Simulation</h1>
     
-    <div class="kontrol-grup">
-        <h3>Langkah 1: Rekam Sandi</h3>
-        <p style="font-size: 14px;">Ucapkan nama Anda (atau kata rahasia) agar sistem mengenali perintah Anda nanti.</p>
-        <button id="btn-sandi">Rekam Sandi Suara</button>
-        <div id="status-sandi">Kata sandi belum diatur.</div>
+    <div class="setup-container">
+        <button id="btn-sandi">1. Rekam Nama/Sandi</button>
+        <button id="btn-mulai" disabled>2. Mulai Perintah</button>
+        <div id="status-sandi">Sandi belum diatur</div>
+        <div id="pesan">Silakan rekam sandi suara terlebih dahulu.</div>
     </div>
 
-    <div class="kontrol-grup">
-        <h3>Langkah 2: Beri Perintah</h3>
-        <button id="btn-mulai" disabled>Mulai Dengarkan</button>
-        <div id="pesan">Atur sandi terlebih dahulu.</div>
+    <div class="dashboard">
+        <div class="ruangan" id="box-1">
+            <h3>Ruangan 1</h3>
+            <div class="perangkat lampu" id="lampu-1">💡 Lampu OFF</div>
+            <div class="perangkat kipas" id="kipas-1"><span>🌀</span> Kipas OFF</div>
+        </div>
+        <div class="ruangan" id="box-2">
+            <h3>Ruangan 2</h3>
+            <div class="perangkat lampu" id="lampu-2">💡 Lampu OFF</div>
+            <div class="perangkat kipas" id="kipas-2"><span>🌀</span> Kipas OFF</div>
+        </div>
+        <div class="ruangan" id="box-3">
+            <h3>Ruangan 3</h3>
+            <div class="perangkat lampu" id="lampu-3">💡 Lampu OFF</div>
+            <div class="perangkat kipas" id="kipas-3"><span>🌀</span> Kipas OFF</div>
+        </div>
+        <div class="ruangan" id="box-4">
+            <h3>Ruangan 4</h3>
+            <div class="perangkat lampu" id="lampu-4">💡 Lampu OFF</div>
+            <div class="perangkat kipas" id="kipas-4"><span>🌀</span> Kipas OFF</div>
+        </div>
+        <div class="ruangan" id="box-5">
+            <h3>Ruangan 5</h3>
+            <div class="perangkat lampu" id="lampu-5">💡 Lampu OFF</div>
+            <div class="perangkat kipas" id="kipas-5"><span>🌀</span> Kipas OFF</div>
+        </div>
     </div>
 
     <script>
         const btnSandi = document.getElementById('btn-sandi');
         const btnMulai = document.getElementById('btn-mulai');
-        const indikator = document.getElementById('indikator');
-        const pesan = document.getElementById('pesan');
         const statusSandi = document.getElementById('status-sandi');
+        const pesan = document.getElementById('pesan');
 
-        let kataSandiTersimpan = ""; // Menyimpan kata sandi suara
-        let modeRekamSandi = false; // Penanda apakah kita sedang merekam sandi atau perintah
+        let kataSandiTersimpan = "";
+        let modeRekamSandi = false;
 
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
+        // Fungsi mengubah teks angka bahasa indonesia menjadi digit nominal
+        function normalisasiAngka(teks) {
+            return teks
+                .replace(/satu/g, '1')
+                .replace(/dua/g, '2')
+                .replace(/tiga/g, '3')
+                .replace(/empat/g, '4')
+                .replace(/lima/g, '5');
+        }
+
         if (SpeechRecognition) {
             const recognition = new SpeechRecognition();
-            recognition.lang = 'id-ID'; 
-            recognition.continuous = false; 
+            recognition.lang = 'id-ID';
+            recognition.continuous = false;
             recognition.interimResults = false;
 
-            // Tombol untuk merekam sandi
+            // Tombol Rekam Sandi
             btnSandi.addEventListener('click', () => {
                 modeRekamSandi = true;
                 recognition.start();
-                statusSandi.innerText = "Mendengarkan sandi... Ucapkan satu kata!";
+                statusSandi.innerText = "Mendengarkan nama...";
+                pesan.innerText = "Sebutkan nama Anda (1 kata saja).";
                 btnSandi.disabled = true;
                 btnMulai.disabled = true;
             });
 
-            // Tombol untuk mulai mendeteksi perintah
+            // Tombol Mulai Perintah
             btnMulai.addEventListener('click', () => {
                 modeRekamSandi = false;
                 recognition.start();
-                pesan.innerText = `Mendengarkan... Ucapkan "${kataSandiTersimpan} nyala" atau "${kataSandiTersimpan} mati"`;
+                pesan.innerText = `Mendengarkan... Contoh: "${kataSandiTersimpan} lampu 3 nyala"`;
                 btnMulai.disabled = true;
                 btnSandi.disabled = true;
             });
 
-            // Ketika suara ditangkap
+            // Proses Hasil Suara
             recognition.onresult = (event) => {
-                const hasilSuara = event.results[0][0].transcript.toLowerCase().trim();
+                let hasilSuara = event.results[0][0].transcript.toLowerCase().trim();
+                
+                // Normalisasi teks agar "satu" jadi "1", dll.
+                hasilSuara = normalisasiAngka(hasilSuara);
 
                 if (modeRekamSandi) {
-                    // Jika sedang mode rekam sandi
+                    // Simpan Sandi
                     kataSandiTersimpan = hasilSuara;
-                    statusSandi.innerText = `Sandi tersimpan: "${kataSandiTersimpan}"`;
-                    pesan.innerText = "Sandi berhasil diatur. Sekarang Anda bisa memberi perintah.";
-                    btnMulai.disabled = false; // Aktifkan tombol perintah
+                    statusSandi.innerText = `Pemilik: "${kataSandiTersimpan}"`;
+                    pesan.innerText = "Sandi disimpan! Silakan klik tombol 2 untuk memberi perintah.";
+                    btnMulai.disabled = false;
                 } else {
-                    // Jika sedang mode perintah biasa
-                    pesan.innerText = `Kamu mengucapkan: "${hasilSuara}"`;
+                    // Deteksi Perintah Kompleks
+                    pesan.innerHTML = `Terdeteksi: <b>"${hasilSuara}"</b>`;
 
-                    // Cek apakah perintah diawali/mengandung kata sandi
-                    if (hasilSuara.includes(kataSandiTersimpan)) {
-                        
-                        // Cek kata nyala / mati
-                        if (hasilSuara.includes('nyala')) {
-                            indikator.style.backgroundColor = '#28a745';
-                            indikator.innerText = 'NYALA';
-                            indikator.style.boxShadow = '0 0 50px #28a745';
-                            pesan.innerText += "\n✅ Perintah Diterima!";
-                        } else if (hasilSuara.includes('mati')) {
-                            indikator.style.backgroundColor = '#dc3545';
-                            indikator.innerText = 'MATI';
-                            indikator.style.boxShadow = '0 0 50px #dc3545';
-                            pesan.innerText += "\n✅ Perintah Diterima!";
+                    // 1. Cek Sandi Kebenaran Pemilik
+                    if (!hasilSuara.includes(kataSandiTersimpan)) {
+                        pesan.innerHTML += "<br><span style='color:#ff3333;'>❌ Akses Ditolak! Nama pemilik salah.</span>";
+                        return;
+                    }
+
+                    // 2. Deteksi Ruangan (1 - 5)
+                    let nomorRuangan = null;
+                    for (let i = 1; i <= 5; i++) {
+                        if (hasilSuara.includes(i.toString())) {
+                            nomorRuangan = i;
+                            break;
+                        }
+                    }
+
+                    // 3. Deteksi Jenis Alat (Lampu / Kipas)
+                    let tipeAlat = null;
+                    if (hasilSuara.includes('lampu')) {
+                        tipeAlat = 'lampu';
+                    } else if (hasilSuara.includes('kipas') || hasilSuara.includes('baling')) {
+                        tipeAlat = 'kipas';
+                    }
+
+                    // 4. Deteksi Aksi (Nyala / Mati)
+                    let aksi = null;
+                    if (hasilSuara.includes('nyala') || hasilSuara.includes('hidup')) {
+                        aksi = 'nyala';
+                    } else if (hasilSuara.includes('mati')) {
+                        aksi = 'mati';
+                    }
+
+                    // Eksekusi jika perintah lengkap
+                    if (nomorRuangan && tipeAlat && aksi) {
+                        const targetID = `${tipeAlat}-${nomorRuangan}`;
+                        const elemenAlat = document.getElementById(targetID);
+
+                        if (aksi === 'nyala') {
+                            elemenAlat.classList.add('active');
+                            elemenAlat.innerHTML = tipeAlat === 'lampu' ? '💡 Lampu ON' : '<span>🌀</span> Kipas ON';
+                            pesan.innerHTML += `<br><span style='color:#00ff88;'>✅ Berhasil: ${tipeAlat} ${nomorRuangan} dinyalakan!</span>`;
                         } else {
-                            pesan.innerText += "\n⚠️ Sandi benar, tapi perintah (nyala/mati) tidak ditemukan.";
+                            elemenAlat.classList.remove('active');
+                            elemenAlat.innerHTML = tipeAlat === 'lampu' ? '💡 Lampu OFF' : '<span>🌀</span> Kipas OFF';
+                            pesan.innerHTML += `<br><span style='color:#ff3333;'>✅ Berhasil: ${tipeAlat} ${nomorRuangan} dimatikan!</span>`;
                         }
                     } else {
-                        // Jika tidak ada kata sandi di dalam ucapan
-                        pesan.innerText += `\n❌ Akses Ditolak! Anda bukan ${kataSandiTersimpan}.`;
+                        // Jika ada bagian perintah yang kurang jelas
+                        pesan.innerHTML += "<br><span style='color:#ffff00;'>⚠️ Perintah kurang jelas. Pastikan sebutkan: [Nama] [Alat] [Nomor Ruangan] [Nyala/Mati]</span>";
                     }
                 }
             };
 
-            // Jika error
-            recognition.onerror = (event) => {
-                if(modeRekamSandi) {
-                    statusSandi.innerText = "Error merekam sandi: " + event.error;
-                } else {
-                    pesan.innerText = "Terjadi kesalahan: " + event.error;
-                }
+            recognition.onerror = (e) => {
+                pesan.innerText = "Error: " + e.error + ". Coba klik tombol lagi.";
             };
 
-            // Saat selesai mendengar
             recognition.onend = () => {
                 btnSandi.disabled = false;
-                if (kataSandiTersimpan !== "") {
-                    btnMulai.disabled = false;
-                }
+                if (kataSandiTersimpan !== "") btnMulai.disabled = false;
             };
 
         } else {
-            pesan.innerText = "Browser ini tidak mendukung deteksi suara.";
-            btnSandi.disabled = true;
+            pesan.innerText = "Browser tidak mendukung Web Speech API.";
         }
     </script>
 </body>
 </html>
+
