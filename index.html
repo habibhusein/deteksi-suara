@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deteksi Suara dengan Sandi</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #222;
+            color: white;
+            transition: background-color 0.5s ease;
+        }
+        #indikator {
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            background-color: #555;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            transition: all 0.3s ease;
+        }
+        .kontrol-grup {
+            background-color: #333;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            margin-bottom: 20px;
+            width: 80%;
+            max-width: 400px;
+        }
+        button {
+            padding: 12px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;
+            color: white;
+            margin: 5px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        #btn-sandi { background-color: #ff9800; }
+        #btn-mulai { background-color: #007bff; }
+        button:disabled { background-color: #666; cursor: not-allowed; }
+        
+        #status-sandi {
+            color: #ff9800;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        #pesan {
+            font-size: 16px;
+            text-align: center;
+            padding: 10px;
+            min-height: 50px;
+            color: #ccc;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="indikator">MATI</div>
+    
+    <div class="kontrol-grup">
+        <h3>Langkah 1: Rekam Sandi</h3>
+        <p style="font-size: 14px;">Ucapkan nama Anda (atau kata rahasia) agar sistem mengenali perintah Anda nanti.</p>
+        <button id="btn-sandi">Rekam Sandi Suara</button>
+        <div id="status-sandi">Kata sandi belum diatur.</div>
+    </div>
+
+    <div class="kontrol-grup">
+        <h3>Langkah 2: Beri Perintah</h3>
+        <button id="btn-mulai" disabled>Mulai Dengarkan</button>
+        <div id="pesan">Atur sandi terlebih dahulu.</div>
+    </div>
+
+    <script>
+        const btnSandi = document.getElementById('btn-sandi');
+        const btnMulai = document.getElementById('btn-mulai');
+        const indikator = document.getElementById('indikator');
+        const pesan = document.getElementById('pesan');
+        const statusSandi = document.getElementById('status-sandi');
+
+        let kataSandiTersimpan = ""; // Menyimpan kata sandi suara
+        let modeRekamSandi = false; // Penanda apakah kita sedang merekam sandi atau perintah
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+        if (SpeechRecognition) {
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'id-ID'; 
+            recognition.continuous = false; 
+            recognition.interimResults = false;
+
+            // Tombol untuk merekam sandi
+            btnSandi.addEventListener('click', () => {
+                modeRekamSandi = true;
+                recognition.start();
+                statusSandi.innerText = "Mendengarkan sandi... Ucapkan satu kata!";
+                btnSandi.disabled = true;
+                btnMulai.disabled = true;
+            });
+
+            // Tombol untuk mulai mendeteksi perintah
+            btnMulai.addEventListener('click', () => {
+                modeRekamSandi = false;
+                recognition.start();
+                pesan.innerText = `Mendengarkan... Ucapkan "${kataSandiTersimpan} nyala" atau "${kataSandiTersimpan} mati"`;
+                btnMulai.disabled = true;
+                btnSandi.disabled = true;
+            });
+
+            // Ketika suara ditangkap
+            recognition.onresult = (event) => {
+                const hasilSuara = event.results[0][0].transcript.toLowerCase().trim();
+
+                if (modeRekamSandi) {
+                    // Jika sedang mode rekam sandi
+                    kataSandiTersimpan = hasilSuara;
+                    statusSandi.innerText = `Sandi tersimpan: "${kataSandiTersimpan}"`;
+                    pesan.innerText = "Sandi berhasil diatur. Sekarang Anda bisa memberi perintah.";
+                    btnMulai.disabled = false; // Aktifkan tombol perintah
+                } else {
+                    // Jika sedang mode perintah biasa
+                    pesan.innerText = `Kamu mengucapkan: "${hasilSuara}"`;
+
+                    // Cek apakah perintah diawali/mengandung kata sandi
+                    if (hasilSuara.includes(kataSandiTersimpan)) {
+                        
+                        // Cek kata nyala / mati
+                        if (hasilSuara.includes('nyala')) {
+                            indikator.style.backgroundColor = '#28a745';
+                            indikator.innerText = 'NYALA';
+                            indikator.style.boxShadow = '0 0 50px #28a745';
+                            pesan.innerText += "\n✅ Perintah Diterima!";
+                        } else if (hasilSuara.includes('mati')) {
+                            indikator.style.backgroundColor = '#dc3545';
+                            indikator.innerText = 'MATI';
+                            indikator.style.boxShadow = '0 0 50px #dc3545';
+                            pesan.innerText += "\n✅ Perintah Diterima!";
+                        } else {
+                            pesan.innerText += "\n⚠️ Sandi benar, tapi perintah (nyala/mati) tidak ditemukan.";
+                        }
+                    } else {
+                        // Jika tidak ada kata sandi di dalam ucapan
+                        pesan.innerText += `\n❌ Akses Ditolak! Anda bukan ${kataSandiTersimpan}.`;
+                    }
+                }
+            };
+
+            // Jika error
+            recognition.onerror = (event) => {
+                if(modeRekamSandi) {
+                    statusSandi.innerText = "Error merekam sandi: " + event.error;
+                } else {
+                    pesan.innerText = "Terjadi kesalahan: " + event.error;
+                }
+            };
+
+            // Saat selesai mendengar
+            recognition.onend = () => {
+                btnSandi.disabled = false;
+                if (kataSandiTersimpan !== "") {
+                    btnMulai.disabled = false;
+                }
+            };
+
+        } else {
+            pesan.innerText = "Browser ini tidak mendukung deteksi suara.";
+            btnSandi.disabled = true;
+        }
+    </script>
+</body>
+</html>
